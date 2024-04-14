@@ -1,18 +1,18 @@
 use colored::Colorize;
 
-use crate::{handler::Handler, ResponseStructure};
+use crate::{handler::Handler, request_type::RequestType, ResponseStructure};
 use std::{
     fs,
     io::{prelude::*, BufReader},
     net::{TcpListener, TcpStream},
 };
 
-pub struct Server {
-    handlers: Vec<Handler>,
+pub struct Server<'a> {
+    handlers: Vec<Handler<'a>>,
     listener: Option<TcpListener>,
 }
 
-impl Server {
+impl<'a> Server<'a> {
     pub fn new() -> Self {
         // let addr = "127.0.0.1:7878";
 
@@ -34,7 +34,7 @@ impl Server {
         }
     }
 
-    pub fn add_handler(&mut self, handler: Handler) {
+    pub fn add_handler(&mut self, handler: Handler<'a>) {
         println!("added handler for {}", handler.path());
         self.handlers.push(handler);
     }
@@ -54,53 +54,54 @@ impl Server {
             status_message: "Not Found",
             data: fs::read("pages/404.html").unwrap(),
         };
-        if let Some(path) = split.get(1) {
-            let mut fpath = path.clone();
 
-            // check if any handler handles this path
-            for handler in &self.handlers {
-                if handler.path().eq(&fpath) {
-                    handler.handle(stream);
-                    println!(
-                        "{} ({}):\t{}",
-                        "HANDLED".blue(),
-                        handler.path().green(),
-                        http_request.get(0).unwrap().blue()
-                    );
-                    // only one handler can handle a path
-                    return;
-                }
-            }
-            // else, try to return resource. else, 404.
+        let mut path: String = split.get(1).unwrap_or(&String::from("/")).clone();
+        let method_str: String = split.get(0).unwrap_or(&String::from("GET")).clone();
 
-            // first, check if path has a full stop
-            let mut has_dot = false;
-            for c in path.chars() {
-                if c.eq(&'.') {
-                    has_dot = true;
-                    break;
-                }
-            }
-
-            if !has_dot {
-                fpath = fpath + ".html";
+        let method: RequestType = RequestType::from_str(&method_str);
+        // check if any handler handles this path and method
+        for handler in &self.handlers {
+            if handler.path().eq(&path) && handler.methods.contains(&method) {
+                handler.handle(stream);
                 println!(
-                    "{}",
-                    format!(
-                        "{}",
-                        "path does not contain full stop, appending .html".bright_blue()
-                    )
+                    "{} ({}):\t{}",
+                    "HANDLED".blue(),
+                    handler.path().green(),
+                    http_request.get(0).unwrap().blue()
                 );
+                // only one handler can handle a path
+                return;
             }
+        }
+        // else, try to return resource. else, 404.
 
-            let contents = fs::read(format!("pages/{fpath}"));
-            if let Ok(content) = contents {
-                res = ResponseStructure {
-                    status: 200,
-                    status_message: "Resource Found",
-                    data: content,
-                };
+        // first, check if path has a full stop
+        let mut has_dot = false;
+        for c in path.chars() {
+            if c.eq(&'.') {
+                has_dot = true;
+                break;
             }
+        }
+
+        if !has_dot {
+            path = path + ".html";
+            println!(
+                "{}",
+                format!(
+                    "{}",
+                    "path does not contain full stop, appending .html".bright_blue()
+                )
+            );
+        }
+
+        let contents = fs::read(format!("pages/{path}"));
+        if let Ok(content) = contents {
+            res = ResponseStructure {
+                status: 200,
+                status_message: "Resource Found",
+                data: content,
+            };
         }
 
         let mut response =
