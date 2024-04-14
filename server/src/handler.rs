@@ -1,14 +1,21 @@
 use std::{fs, io::Write, net::TcpStream};
 
-pub struct Handler {
+use crate::request_type::RequestType;
+
+pub struct Handler<'a> {
     path: String,
+    pub methods: &'a [RequestType],
     cb: Option<Box<dyn Fn(TcpStream) -> ()>>,
 }
 
-impl Handler {
-    pub fn new(path: String, cb: Option<Box<dyn Fn(TcpStream) -> ()>>) -> Self {
+impl<'a> Handler<'a> {
+    pub fn new(
+        path: String,
+        cb: Option<Box<dyn Fn(TcpStream) -> ()>>,
+        methods: &'a [RequestType],
+    ) -> Self {
         println!("created handler for {}", path);
-        Handler { path, cb }
+        Handler { path, cb, methods }
     }
 
     pub fn for_resource(path: String, resource_path: &str) -> Self {
@@ -36,6 +43,7 @@ impl Handler {
         Handler {
             path,
             cb: Some(Box::new(handler)),
+            methods: &[RequestType::GET],
         }
     }
 

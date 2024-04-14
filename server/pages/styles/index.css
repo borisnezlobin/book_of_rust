@@ -1,5 +1,6 @@
 body {
-    font-family: "Open Sans";
+    font-family: "Charter", "Open Sans";
     background-color: #f5f5f5;
     color: #3c3c3c;
+    max-width: 80rem;
 }
