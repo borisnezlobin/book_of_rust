@@ -1,8 +1,8 @@
-use colored::Colorize;
 use handler::Handler;
 use request_type::RequestType;
 use server::Server;
-use std::{io::Write, net::TcpStream};
+use srvr::ThreadPool;
+use std::net::TcpStream;
 
 mod handler;
 mod request_type;
@@ -35,7 +35,7 @@ fn main() {
     server.add_handler(Handler::new(
         "/submit".to_string(),
         Some(Box::new(|mut stream: TcpStream| {
-            println!("Got a post reqest!!1!");
+            println!("HTTP/1.1 200 OK\r\nGot a post reqest!!1!\r\n");
         })),
         &[RequestType::POST],
     ));

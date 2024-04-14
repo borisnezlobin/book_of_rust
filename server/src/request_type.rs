@@ -13,7 +13,7 @@ pub enum RequestType {
 
 impl RequestType {
     pub fn from_str(str: &str) -> RequestType {
-        return match (str) {
+        return match str {
             "GET" => RequestType::GET,
             "POST" => RequestType::POST,
             "HEAD" => RequestType::HEAD,

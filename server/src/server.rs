@@ -1,15 +1,17 @@
 use colored::Colorize;
 
-use crate::{handler::Handler, request_type::RequestType, ResponseStructure};
+use crate::{handler::Handler, request_type::RequestType, ResponseStructure, ThreadPool};
 use std::{
     fs,
     io::{prelude::*, BufReader},
     net::{TcpListener, TcpStream},
+    sync::{Arc, Mutex},
 };
 
 pub struct Server<'a> {
     handlers: Vec<Handler<'a>>,
     listener: Option<TcpListener>,
+    listener_mutex: Arc<Mutex<()>>,
 }
 
 impl<'a> Server<'a> {
@@ -19,6 +21,7 @@ impl<'a> Server<'a> {
         let server = Server {
             handlers: vec![],
             listener: None,
+            listener_mutex: Arc::new(Mutex::new(())),
         };
 
         return server;
@@ -27,10 +30,21 @@ impl<'a> Server<'a> {
     pub fn listen(&mut self, addr: &str) {
         let listener = TcpListener::bind(addr).unwrap();
         self.listener = Some(listener.try_clone().unwrap());
+        let pool = ThreadPool::new(4);
         println!("{}", format!("Listening on http://{addr}").bold().green());
+
+        let listener_mutex = Arc::clone(&self.listener_mutex);
+
         for stream in listener.incoming() {
             let stream = stream.unwrap();
-            self.handle_request(stream)
+            let listener_mutex = Arc::clone(&listener_mutex);
+
+            // does not compile
+            pool.execute(move || {
+                // Lock the mutex before accessing the listener
+                let _guard = listener_mutex.lock().unwrap();
+                self.handle_request(stream);
+            });
         }
     }
 
