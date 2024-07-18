@@ -8,13 +8,13 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-pub struct Server<'a> {
-    handlers: Vec<Handler<'a>>,
+pub struct Server {
+    handlers: Vec<Handler<'static>>,
     listener: Option<TcpListener>,
     listener_mutex: Arc<Mutex<()>>,
 }
 
-impl<'a> Server<'a> {
+impl<'a> Server {
     pub fn new() -> Self {
         // let addr = "127.0.0.1:7878";
 
@@ -36,53 +36,55 @@ impl<'a> Server<'a> {
         let listener_mutex = Arc::clone(&self.listener_mutex);
 
         for stream in listener.incoming() {
-            let stream = stream.unwrap();
-            let listener_mutex = Arc::clone(&listener_mutex);
+            let stream = stream.unwrap().try_clone().unwrap();
+            let lm = Arc::clone(&listener_mutex);
+            let handlers = self.handlers.clone();
 
-            // does not compile
             pool.execute(move || {
-                // Lock the mutex before accessing the listener
-                let _guard = listener_mutex.lock().unwrap();
-                self.handle_request(stream);
+                let _guard = lm.lock().unwrap();
+                handle_request_with_handlers(stream, handlers)
             });
         }
     }
 
-    pub fn add_handler(&mut self, handler: Handler<'a>) {
+    pub fn add_handler(&mut self, handler: Handler<'static>) {
         println!("added handler for {}", handler.path());
         self.handlers.push(handler);
     }
+}
 
-    pub fn handle_request(&self, mut stream: TcpStream) {
-        let buf_reader = BufReader::new(&mut stream);
-        let http_request: Vec<_> = buf_reader
-            .lines()
-            .map(|result| result.unwrap())
-            .take_while(|line| !line.is_empty())
-            .collect();
+fn handle_request_with_handlers(mut stream: TcpStream, handlers: Vec<Handler>) {
+    let buf_reader = BufReader::new(&mut stream);
+    let http_request: Vec<_> = buf_reader
+        .lines()
+        .map(|result| result.unwrap())
+        .take_while(|line| !line.is_empty())
+        .collect();
 
-        let target = http_request.get(0).expect("Invalid HTTP request.");
-        let split: Vec<String> = target.split(" ").map(|s| s.to_string()).collect();
-        let mut res: ResponseStructure = ResponseStructure {
-            status: 404,
-            status_message: "Not Found",
-            data: fs::read("pages/404.html").unwrap(),
+    let target = http_request.get(0).expect("Invalid HTTP request.");
+    let split: Vec<String> = target.split(" ").map(|s| s.to_string()).collect();
+    let mut res: ResponseStructure = ResponseStructure {
+        status: 404,
+        status_message: "Not Found",
+        data: fs::read("pages/404.html").unwrap(),
+    };
+
+    let mut path: String = split.get(1).unwrap_or(&String::from("/")).clone();
+    let method_str: String = split.get(0).unwrap_or(&String::from("GET")).clone();
+
+    let method = RequestType::from_str(&method_str);
+    if let Err(_) = method {
+        println!("Invalid request method: {}", method_str);
+        res = ResponseStructure {
+            status: 400,
+            status_message: "Bad Request",
+            data: fs::read("pages/error.html").unwrap(),
         };
-
-        let mut path: String = split.get(1).unwrap_or(&String::from("/")).clone();
-        let method_str: String = split.get(0).unwrap_or(&String::from("GET")).clone();
-
-        let method: RequestType = RequestType::from_str(&method_str);
+    } else if let Ok(method) = method {
         // check if any handler handles this path and method
-        for handler in &self.handlers {
+        for handler in handlers {
             if handler.path().eq(&path) && handler.methods.contains(&method) {
                 handler.handle(stream);
-                println!(
-                    "{} ({}):\t{}",
-                    "HANDLED".blue(),
-                    handler.path().green(),
-                    http_request.get(0).unwrap().blue()
-                );
                 // only one handler can handle a path
                 return;
             }
@@ -117,31 +119,30 @@ impl<'a> Server<'a> {
                 data: content,
             };
         }
-
-        let mut response =
-            format!("HTTP/1.1 {} {}\r\n\r\n", res.status, res.status_message).into_bytes();
-
-        response.extend(res.data);
-        let _ = stream.write_all(response.as_slice());
-
-        self.log_response(target, res.status, res.status_message);
     }
+    let mut response =
+        format!("HTTP/1.1 {} {}\r\n\r\n", res.status, res.status_message).into_bytes();
 
-    fn log_response(&self, request: &String, res_status: i32, res_message: &str) {
-        if res_status == 200 {
-            println!(
-                "{} {}:   {}",
-                format!("{}", res_status).bold().green(),
-                res_message.green(),
-                request.blue()
-            );
-        } else {
-            println!(
-                "{} {}:  {}",
-                format!("{}", res_status).bold().red(),
-                res_message.red(),
-                format!("{} (FAILED)", request).red(),
-            );
-        }
+    response.extend(res.data);
+    let _ = stream.write_all(response.as_slice());
+
+    log_response(target, res.status, res.status_message);
+}
+
+fn log_response(request: &String, res_status: i32, res_message: &str) {
+    if res_status == 200 {
+        println!(
+            "{} {}:   {}",
+            format!("{}", res_status).bold().green(),
+            res_message.green(),
+            request.blue()
+        );
+    } else {
+        println!(
+            "{} {}:  {}",
+            format!("{}", res_status).bold().red(),
+            res_message.red(),
+            format!("{} (FAILED)", request).red(),
+        );
     }
 }
