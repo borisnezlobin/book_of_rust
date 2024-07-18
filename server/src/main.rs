@@ -2,7 +2,7 @@ use handler::Handler;
 use request_type::RequestType;
 use server::Server;
 use srvr::ThreadPool;
-use std::net::TcpStream;
+use std::{net::TcpStream, sync::Arc};
 
 mod handler;
 mod request_type;
@@ -34,11 +34,11 @@ fn main() {
 
     server.add_handler(Handler::new(
         "/submit".to_string(),
-        Some(Box::new(|mut stream: TcpStream| {
-            println!("HTTP/1.1 200 OK\r\nGot a post reqest!!1!\r\n");
+        Some(Arc::new(|mut _stream: TcpStream| {
+            println!("HTTP/1.1 200 OK\r\nGot a post reqest to /submit!!1!\r\n");
         })),
         &[RequestType::POST],
     ));
 
-    server.listen("127.0.0.1:7878");
+    server.listen("10.0.0.15:7878");
 }

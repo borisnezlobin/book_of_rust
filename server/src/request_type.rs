@@ -12,18 +12,18 @@ pub enum RequestType {
 }
 
 impl RequestType {
-    pub fn from_str(str: &str) -> RequestType {
+    pub fn from_str(str: &str) -> Result<RequestType, &'static str> {
         return match str {
-            "GET" => RequestType::GET,
-            "POST" => RequestType::POST,
-            "HEAD" => RequestType::HEAD,
-            "PUT" => RequestType::PUT,
-            "DELETE" => RequestType::DELETE,
-            "CONNECT" => RequestType::CONNECT,
-            "TRACE" => RequestType::TRACE,
-            "OPTIONS" => RequestType::OPTIONS,
-            "PATCH" => RequestType::PATCH,
-            _ => panic!("couldn't match given string to http verb"),
+            "GET" => Ok(RequestType::GET),
+            "POST" => Ok(RequestType::POST),
+            "HEAD" => Ok(RequestType::HEAD),
+            "PUT" => Ok(RequestType::PUT),
+            "DELETE" => Ok(RequestType::DELETE),
+            "CONNECT" => Ok(RequestType::CONNECT),
+            "TRACE" => Ok(RequestType::TRACE),
+            "OPTIONS" => Ok(RequestType::OPTIONS),
+            "PATCH" => Ok(RequestType::PATCH),
+            _ => Err("Invalid request type"),
         };
     }
 }

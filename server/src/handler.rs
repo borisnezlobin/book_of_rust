@@ -1,17 +1,18 @@
 use std::{fs, io::Write, net::TcpStream};
+use std::sync::Arc;
 
 use crate::request_type::RequestType;
 
 pub struct Handler<'a> {
     path: String,
     pub methods: &'a [RequestType],
-    cb: Option<Box<dyn Fn(TcpStream) -> ()>>,
+    cb: Option<Arc<dyn Fn(TcpStream) -> ()>>,
 }
 
 impl<'a> Handler<'a> {
     pub fn new(
         path: String,
-        cb: Option<Box<dyn Fn(TcpStream) -> ()>>,
+        cb: Option<Arc<dyn Fn(TcpStream) -> ()>>,
         methods: &'a [RequestType],
     ) -> Self {
         println!("created handler for {}", path);
@@ -42,7 +43,7 @@ impl<'a> Handler<'a> {
         };
         Handler {
             path,
-            cb: Some(Box::new(handler)),
+            cb: Some(Arc::new(handler)),
             methods: &[RequestType::GET],
         }
     }
@@ -60,3 +61,20 @@ impl<'a> Handler<'a> {
         false
     }
 }
+
+
+impl Clone for Handler<'static> {
+    fn clone(&self) -> Self {
+        Handler {
+            path: self.path.clone(),
+            cb: if self.cb.is_some() {
+                Some(self.cb.clone().unwrap())
+            } else {
+                None
+            },
+            methods: self.methods,
+        }
+    }
+}
+
+unsafe impl Send for Handler<'static> {}
